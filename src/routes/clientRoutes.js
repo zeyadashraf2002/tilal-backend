@@ -1,0 +1,29 @@
+import express from 'express';
+import {
+  clientLogin,
+  getClients,
+  getClient,
+  createClient,
+  updateClient,
+  deleteClient,
+  getClientTasks
+} from '../controllers/clientController.js';
+import { protect, authorize } from '../middleware/auth.js';
+
+const router = express.Router();
+
+// Public route
+router.post('/login', clientLogin);
+
+// Protected routes
+router.get('/', protect, authorize('admin'), getClients);
+router.get('/:id', protect, getClient);
+router.get('/:id/tasks', protect, getClientTasks);
+
+// Admin only routes
+router.post('/', protect, authorize('admin'), createClient);
+router.put('/:id', protect, updateClient);
+router.delete('/:id', protect, authorize('admin'), deleteClient);
+
+export default router;
+
