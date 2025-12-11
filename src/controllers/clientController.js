@@ -5,16 +5,12 @@ import crypto from 'crypto';
 import { notifyClientCredentials } from '../services/notificationService.js';
 
 /**
- * ✅ UNIFIED: Client login using standard JWT
- * @desc    Client login
- * @route   POST /api/v1/clients/login
- * @access  Public
+ *   UNIFIED: Client login using standard JWT
  */
 export const clientLogin = async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
-    // Find client by username or email
     const client = await Client.findOne({
       $or: [
         { username: username || email },
@@ -29,7 +25,6 @@ export const clientLogin = async (req, res) => {
       });
     }
 
-    // Check if client is active
     if (client.status !== 'active') {
       return res.status(401).json({
         success: false,
@@ -37,7 +32,6 @@ export const clientLogin = async (req, res) => {
       });
     }
 
-    // Check if client has password set
     if (!client.password) {
       return res.status(401).json({
         success: false,
@@ -45,7 +39,6 @@ export const clientLogin = async (req, res) => {
       });
     }
 
-    // Check password
     const isMatch = await client.comparePassword(password);
 
     if (!isMatch) {
@@ -55,10 +48,7 @@ export const clientLogin = async (req, res) => {
       });
     }
 
-    // ✅ UNIFIED: Generate token with role='client'
     const token = generateToken(client._id, 'client');
-
-    // Get public profile
     const clientData = client.getPublicProfile();
 
     res.status(200).json({
@@ -67,7 +57,7 @@ export const clientLogin = async (req, res) => {
       data: {
         token,
         client: clientData,
-        user: { ...clientData, role: 'client' }, // ✅ Add unified user object
+        user: { ...clientData, role: 'client' },
         isPasswordTemporary: client.isPasswordTemporary
       }
     });
@@ -82,9 +72,7 @@ export const clientLogin = async (req, res) => {
 };
 
 /**
- * @desc    Get all clients
- * @route   GET /api/v1/clients
- * @access  Private (Admin only)
+ *  UPDATED: Get all clients with FILTERS
  */
 export const getClients = async (req, res) => {
   try {
@@ -92,6 +80,8 @@ export const getClients = async (req, res) => {
       status,
       branch,
       search,
+      paymentType,      
+      propertyType,     
       page = 1,
       limit = 20,
       sort = '-createdAt'
@@ -99,8 +89,19 @@ export const getClients = async (req, res) => {
 
     const query = {};
 
+    //  Filter by Status
     if (status) {
       query.status = status;
+    }
+
+    //  Filter by Payment Type
+    if (paymentType) {
+      query.paymentType = paymentType;
+    }
+
+    //  Filter by Property Type
+    if (propertyType) {
+      query.propertyType = propertyType;
     }
 
     if (branch) {
@@ -143,9 +144,7 @@ export const getClients = async (req, res) => {
 };
 
 /**
- * @desc    Get single client
- * @route   GET /api/v1/clients/:id
- * @access  Private
+ * Get single client
  */
 export const getClient = async (req, res) => {
   try {
@@ -174,21 +173,17 @@ export const getClient = async (req, res) => {
 };
 
 /**
- * @desc    Create new client
- * @route   POST /api/v1/clients
- * @access  Private (Admin only)
+ * Create new client
  */
 export const createClient = async (req, res) => {
   try {
     const clientData = req.body;
 
-    // ✅ Generate username if not provided
     if (!clientData.username) {
       const randomStr = crypto.randomBytes(4).toString('hex');
       clientData.username = `client_${randomStr}`;
     }
 
-    // ✅ Generate temporary password if not provided
     let tempPassword = null;
     if (!clientData.password) {
       tempPassword = crypto.randomBytes(8).toString('hex');
@@ -200,12 +195,10 @@ export const createClient = async (req, res) => {
 
     const client = await Client.create(clientData);
 
-    // ✅ Send credentials notification if temporary password was generated
     if (tempPassword) {
       await notifyClientCredentials(client, clientData.username, tempPassword);
     }
 
-    // Get public profile
     const clientProfile = client.getPublicProfile();
 
     res.status(201).json({
@@ -227,9 +220,7 @@ export const createClient = async (req, res) => {
 };
 
 /**
- * @desc    Update client
- * @route   PUT /api/v1/clients/:id
- * @access  Private (Admin or Client themselves)
+ * Update client
  */
 export const updateClient = async (req, res) => {
   try {
@@ -242,7 +233,6 @@ export const updateClient = async (req, res) => {
       });
     }
 
-    // ✅ UNIFIED: Check authorization using req.user.role
     if (req.user.role === 'client' && req.user.id !== req.params.id) {
       return res.status(403).json({
         success: false,
@@ -252,7 +242,6 @@ export const updateClient = async (req, res) => {
 
     const updateData = req.body;
 
-    // If password is being updated, mark as not temporary
     if (updateData.password) {
       updateData.isPasswordTemporary = false;
     }
@@ -282,9 +271,40 @@ export const updateClient = async (req, res) => {
 };
 
 /**
- * @desc    Delete client
- * @route   DELETE /api/v1/clients/:id
- * @access  Private (Admin only)
+ * ✅ NEW: Toggle Client Status (Activate/Deactivate)
+ */
+export const toggleClientStatus = async (req, res) => {
+  try {
+    const client = await Client.findById(req.params.id);
+
+    if (!client) {
+      return res.status(404).json({
+        success: false,
+        message: 'Client not found'
+      });
+    }
+
+    // Toggle between active and inactive
+    client.status = client.status === 'active' ? 'inactive' : 'active';
+    await client.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Client ${client.status === 'active' ? 'activated' : 'deactivated'} successfully`,
+      data: client.getPublicProfile()
+    });
+  } catch (error) {
+    console.error('Toggle client status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to toggle client status',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Delete client
  */
 export const deleteClient = async (req, res) => {
   try {
@@ -314,13 +334,10 @@ export const deleteClient = async (req, res) => {
 };
 
 /**
- * @desc    Get client tasks
- * @route   GET /api/v1/clients/:id/tasks
- * @access  Private (Admin or Client themselves)
+ * Get client tasks
  */
 export const getClientTasks = async (req, res) => {
   try {
-    // ✅ UNIFIED: Check authorization
     if (req.user.role === 'client' && req.user.id !== req.params.id) {
       return res.status(403).json({
         success: false,
@@ -356,5 +373,6 @@ export default {
   createClient,
   updateClient,
   deleteClient,
-  getClientTasks
+  getClientTasks,
+  toggleClientStatus
 };
