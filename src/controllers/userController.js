@@ -208,3 +208,30 @@ export const getWorkers = async (req, res) => {
   }
 };
 
+
+/**
+ * @desc    Get get Worker Details
+ * @route   GET /api/v1/users/:id/details
+ * @access  Private
+ */
+export const getWorkerDetails = async (req, res) => {
+  try {
+    const worker = await User.findById(req.params.id)
+      .populate("branch", "name code")
+      .select("-password")
+      .lean();
+
+    if (!worker || worker.role !== "worker") {
+      return res
+        .status(404)
+        .json({ success: false, message: "Worker not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: worker,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
