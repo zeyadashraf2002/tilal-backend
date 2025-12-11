@@ -22,7 +22,12 @@ const sectionSchema = new mongoose.Schema({
     uploadedAt: {
       type: Date,
       default: Date.now
-    }
+    },
+    qtn: {
+      type:Number,
+      default: 1,
+    },
+    description: String,
   }],
   status: {
     type: String,
