@@ -28,4 +28,3 @@ router.delete('/:id', protect, authorize('admin'), deleteClient);
 router.put('/:id/toggle-status', protect, authorize('admin'), toggleClientStatus);
 
 export default router;
-
