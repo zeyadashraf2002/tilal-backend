@@ -113,6 +113,7 @@ app.use(`/api/${API_VERSION}/clients`, clientRoutes);
 app.use(`/api/${API_VERSION}/sites`, siteRoutes);
 app.use(`/api/${API_VERSION}/plants`, plantRoutes);
 app.use(`/api/${API_VERSION}/inventory`, inventoryRoutes);
+app.use(`/api/${API_VERSION}/reports`, reportRoutes);
 app.use(`/api/${API_VERSION}/notifications`, notificationRoutes);
 app.use(`/api/${API_VERSION}/uploads`, uploadRoutes); // ✅ هنا المسار المهم
 

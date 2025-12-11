@@ -7,7 +7,8 @@ import {
   deleteInventoryItem,
   withdrawInventory,
   restockInventory,
-  getInventoryTransactions
+  getInventoryTransactions,
+  getLowStockItems
 } from '../controllers/inventoryController.js';
 import { protect, authorize } from '../middleware/auth.js';
 
@@ -26,6 +27,7 @@ router.post('/', protect, authorize('admin'), createInventoryItem);
 router.put('/:id', protect, authorize('admin'), updateInventoryItem);
 router.delete('/:id', protect, authorize('admin'), deleteInventoryItem);
 router.post('/:id/restock', protect, authorize('admin'), restockInventory);
+router.get('/low-stock', protect, authorize('admin'), getLowStockItems);
 
 export default router;
 

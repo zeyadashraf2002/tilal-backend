@@ -354,6 +354,35 @@ export const getInventoryTransactions = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Get low stock items
+ * @route   GET /api/v1/inventory/low-stock
+ * @access  Private (Admin)
+ */
+export const getLowStockItems = async (req, res) => {
+  try {
+    // ✅ جلب المنتجات اللي الكمية فيها أقل من أو تساوي الحد الأدنى
+    const lowStockItems = await Inventory.find({
+      $expr: { $lte: ['$quantity.current', '$quantity.minimum'] }
+    })
+      .populate('branch', 'name')
+      .sort('quantity.current'); // ترتيب من الأقل كمية
+
+    res.status(200).json({
+      success: true,
+      count: lowStockItems.length,
+      data: lowStockItems
+    });
+  } catch (error) {
+    console.error('Get low stock items error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch low stock items',
+      error: error.message
+    });
+  }
+};
+
 export default {
   getInventoryItems,
   getInventoryItem,
@@ -362,5 +391,6 @@ export default {
   deleteInventoryItem,
   withdrawInventory,
   restockInventory,
-  getInventoryTransactions
+  getInventoryTransactions,
+  getLowStockItems
 };
