@@ -1,6 +1,7 @@
-import Site from '../models/Site.js';
-import Client from '../models/Client.js';
-import { v2 as cloudinary } from 'cloudinary';
+import Site from "../models/Site.js";
+import Client from "../models/Client.js";
+import { v2 as cloudinary } from "cloudinary";
+import mongoose from "mongoose";
 
 /**
  * @desc    Get all sites
@@ -9,7 +10,13 @@ import { v2 as cloudinary } from 'cloudinary';
  */
 export const getAllSites = async (req, res) => {
   try {
-    const { client, search, page = 1, limit = 20, sort = '-createdAt' } = req.query;
+    const {
+      client,
+      search,
+      page = 1,
+      limit = 20,
+      sort = "-createdAt",
+    } = req.query;
 
     const query = {};
 
@@ -21,13 +28,13 @@ export const getAllSites = async (req, res) => {
     // Search by name or description
     if (search) {
       query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } }
+        { name: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } },
       ];
     }
 
     const sites = await Site.find(query)
-      .populate('client', 'name email phone')
+      .populate("client", "name email phone")
       .sort(sort)
       .limit(limit * 1)
       .skip((page - 1) * limit)
@@ -41,14 +48,14 @@ export const getAllSites = async (req, res) => {
       total: count,
       totalPages: Math.ceil(count / limit),
       currentPage: parseInt(page),
-      data: sites
+      data: sites,
     });
   } catch (error) {
-    console.error('Get sites error:', error);
+    console.error("Get sites error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch sites',
-      error: error.message
+      message: "Failed to fetch sites",
+      error: error.message,
     });
   }
 };
@@ -60,26 +67,85 @@ export const getAllSites = async (req, res) => {
  */
 export const getSiteById = async (req, res) => {
   try {
-    const site = await Site.findById(req.params.id)
-      .populate('client', 'name email phone address');
+    const siteId = req.params.id;
 
-    if (!site) {
+    const site = await Site.aggregate([
+      { $match: { _id: new mongoose.Types.ObjectId(siteId) } },
+
+      // Populate the client
+      {
+        $lookup: {
+          from: "clients",
+          localField: "client",
+          foreignField: "_id",
+          as: "client",
+        },
+      },
+      { $unwind: "$client" },
+
+      // Lookup tasks for each section
+      {
+        $lookup: {
+          from: "tasks",
+          let: { sectionIds: "$sections._id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $in: ["$section", "$$sectionIds"] },
+              },
+            },
+          ],
+          as: "allTasks",
+        },
+      },
+
+      // Merge tasks back into each section
+      {
+        $addFields: {
+          sections: {
+            $map: {
+              input: "$sections",
+              as: "sec",
+              in: {
+                $mergeObjects: [
+                  "$$sec",
+                  {
+                    tasks: {
+                      $filter: {
+                        input: "$allTasks",
+                        as: "t",
+                        cond: { $eq: ["$$t.section", "$$sec._id"] },
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+
+      // Remove temporary field
+      { $unset: "allTasks" },
+    ]);
+
+    if (!site || site.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Site not found'
+        message: "Site not found",
       });
     }
 
     res.status(200).json({
       success: true,
-      data: site
+      data: site[0],
     });
   } catch (error) {
-    console.error('Get site error:', error);
+    console.error("Get site error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch site',
-      error: error.message
+      message: "Failed to fetch site",
+      error: error.message,
     });
   }
 };
@@ -97,7 +163,7 @@ export const createSite = async (req, res) => {
     if (req.file && req.file.cloudinaryUrl) {
       siteData.coverImage = {
         url: req.file.cloudinaryUrl,
-        cloudinaryId: req.file.cloudinaryId
+        cloudinaryId: req.file.cloudinaryId,
       };
     }
 
@@ -107,25 +173,27 @@ export const createSite = async (req, res) => {
     // Update client's sites array
     if (site.client) {
       await Client.findByIdAndUpdate(site.client, {
-        $push: { sites: site._id }
+        $push: { sites: site._id },
       });
     }
 
     // Populate and return
-    const populatedSite = await Site.findById(site._id)
-      .populate('client', 'name email phone');
+    const populatedSite = await Site.findById(site._id).populate(
+      "client",
+      "name email phone"
+    );
 
     res.status(201).json({
       success: true,
-      message: 'Site created successfully',
-      data: populatedSite
+      message: "Site created successfully",
+      data: populatedSite,
     });
   } catch (error) {
-    console.error('Create site error:', error);
+    console.error("Create site error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to create site',
-      error: error.message
+      message: "Failed to create site",
+      error: error.message,
     });
   }
 };
@@ -142,7 +210,7 @@ export const updateSite = async (req, res) => {
     if (!site) {
       return res.status(404).json({
         success: false,
-        message: 'Site not found'
+        message: "Site not found",
       });
     }
 
@@ -154,36 +222,35 @@ export const updateSite = async (req, res) => {
       if (site.coverImage?.cloudinaryId) {
         try {
           await cloudinary.uploader.destroy(site.coverImage.cloudinaryId);
-          console.log('🗑️ Old cover image deleted from Cloudinary');
+          console.log("🗑️ Old cover image deleted from Cloudinary");
         } catch (err) {
-          console.error('Failed to delete old image:', err);
+          console.error("Failed to delete old image:", err);
         }
       }
 
       updateData.coverImage = {
         url: req.file.cloudinaryUrl,
-        cloudinaryId: req.file.cloudinaryId
+        cloudinaryId: req.file.cloudinaryId,
       };
     }
 
     // Update site
-    site = await Site.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true, runValidators: true }
-    ).populate('client', 'name email phone');
+    site = await Site.findByIdAndUpdate(req.params.id, updateData, {
+      new: true,
+      runValidators: true,
+    }).populate("client", "name email phone");
 
     res.status(200).json({
       success: true,
-      message: 'Site updated successfully',
-      data: site
+      message: "Site updated successfully",
+      data: site,
     });
   } catch (error) {
-    console.error('Update site error:', error);
+    console.error("Update site error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to update site',
-      error: error.message
+      message: "Failed to update site",
+      error: error.message,
     });
   }
 };
@@ -200,7 +267,7 @@ export const deleteSite = async (req, res) => {
     if (!site) {
       return res.status(404).json({
         success: false,
-        message: 'Site not found'
+        message: "Site not found",
       });
     }
 
@@ -208,9 +275,9 @@ export const deleteSite = async (req, res) => {
     if (site.coverImage?.cloudinaryId) {
       try {
         await cloudinary.uploader.destroy(site.coverImage.cloudinaryId);
-        console.log('🗑️ Cover image deleted from Cloudinary');
+        console.log("🗑️ Cover image deleted from Cloudinary");
       } catch (err) {
-        console.error('Failed to delete cover image:', err);
+        console.error("Failed to delete cover image:", err);
       }
     }
 
@@ -223,7 +290,7 @@ export const deleteSite = async (req, res) => {
               try {
                 await cloudinary.uploader.destroy(img.cloudinaryId);
               } catch (err) {
-                console.error('Failed to delete reference image:', err);
+                console.error("Failed to delete reference image:", err);
               }
             }
           }
@@ -234,7 +301,7 @@ export const deleteSite = async (req, res) => {
     // Remove site from client's sites array
     if (site.client) {
       await Client.findByIdAndUpdate(site.client, {
-        $pull: { sites: site._id }
+        $pull: { sites: site._id },
       });
     }
 
@@ -242,14 +309,14 @@ export const deleteSite = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Site deleted successfully'
+      message: "Site deleted successfully",
     });
   } catch (error) {
-    console.error('Delete site error:', error);
+    console.error("Delete site error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to delete site',
-      error: error.message
+      message: "Failed to delete site",
+      error: error.message,
     });
   }
 };
@@ -266,7 +333,7 @@ export const addSection = async (req, res) => {
     if (!site) {
       return res.status(404).json({
         success: false,
-        message: 'Site not found'
+        message: "Site not found",
       });
     }
 
@@ -274,10 +341,10 @@ export const addSection = async (req, res) => {
 
     // Handle reference images from Cloudinary
     if (req.files && req.files.length > 0) {
-      sectionData.referenceImages = req.files.map(file => ({
+      sectionData.referenceImages = req.files.map((file) => ({
         url: file.url,
         cloudinaryId: file.cloudinaryId,
-        uploadedAt: new Date()
+        uploadedAt: new Date(),
       }));
     }
 
@@ -285,15 +352,15 @@ export const addSection = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Section added successfully',
-      data: site
+      message: "Section added successfully",
+      data: site,
     });
   } catch (error) {
-    console.error('Add section error:', error);
+    console.error("Add section error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to add section',
-      error: error.message
+      message: "Failed to add section",
+      error: error.message,
     });
   }
 };
@@ -310,7 +377,7 @@ export const updateSection = async (req, res) => {
     if (!site) {
       return res.status(404).json({
         success: false,
-        message: 'Site not found'
+        message: "Site not found",
       });
     }
 
@@ -318,10 +385,10 @@ export const updateSection = async (req, res) => {
 
     // Handle new reference images
     if (req.files && req.files.length > 0) {
-      const newImages = req.files.map(file => ({
+      const newImages = req.files.map((file) => ({
         url: file.url,
         cloudinaryId: file.cloudinaryId,
-        uploadedAt: new Date()
+        uploadedAt: new Date(),
       }));
 
       // Get existing images
@@ -337,15 +404,15 @@ export const updateSection = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Section updated successfully',
-      data: site
+      message: "Section updated successfully",
+      data: site,
     });
   } catch (error) {
-    console.error('Update section error:', error);
+    console.error("Update section error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to update section',
-      error: error.message
+      message: "Failed to update section",
+      error: error.message,
     });
   }
 };
@@ -362,21 +429,25 @@ export const deleteSection = async (req, res) => {
     if (!site) {
       return res.status(404).json({
         success: false,
-        message: 'Site not found'
+        message: "Site not found",
       });
     }
 
     // Get section to delete its images
     const section = site.sections.id(req.params.sectionId);
-    
-    if (section && section.referenceImages && section.referenceImages.length > 0) {
+
+    if (
+      section &&
+      section.referenceImages &&
+      section.referenceImages.length > 0
+    ) {
       // Delete reference images from Cloudinary
       for (const img of section.referenceImages) {
         if (img.cloudinaryId) {
           try {
             await cloudinary.uploader.destroy(img.cloudinaryId);
           } catch (err) {
-            console.error('Failed to delete reference image:', err);
+            console.error("Failed to delete reference image:", err);
           }
         }
       }
@@ -386,15 +457,15 @@ export const deleteSection = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Section deleted successfully',
-      data: site
+      message: "Section deleted successfully",
+      data: site,
     });
   } catch (error) {
-    console.error('Delete section error:', error);
+    console.error("Delete section error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to delete section',
-      error: error.message
+      message: "Failed to delete section",
+      error: error.message,
     });
   }
 };
@@ -411,28 +482,28 @@ export const deleteReferenceImage = async (req, res) => {
     if (!site) {
       return res.status(404).json({
         success: false,
-        message: 'Site not found'
+        message: "Site not found",
       });
     }
 
     const section = site.sections.id(req.params.sectionId);
-    
+
     if (!section) {
       return res.status(404).json({
         success: false,
-        message: 'Section not found'
+        message: "Section not found",
       });
     }
 
     // Find image
     const imageIndex = section.referenceImages.findIndex(
-      img => img._id.toString() === req.params.imageId
+      (img) => img._id.toString() === req.params.imageId
     );
 
     if (imageIndex === -1) {
       return res.status(404).json({
         success: false,
-        message: 'Image not found'
+        message: "Image not found",
       });
     }
 
@@ -442,9 +513,9 @@ export const deleteReferenceImage = async (req, res) => {
     if (image.cloudinaryId) {
       try {
         await cloudinary.uploader.destroy(image.cloudinaryId);
-        console.log('🗑️ Reference image deleted from Cloudinary');
+        console.log("🗑️ Reference image deleted from Cloudinary");
       } catch (err) {
-        console.error('Failed to delete image from Cloudinary:', err);
+        console.error("Failed to delete image from Cloudinary:", err);
       }
     }
 
@@ -454,14 +525,14 @@ export const deleteReferenceImage = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Reference image deleted successfully'
+      message: "Reference image deleted successfully",
     });
   } catch (error) {
-    console.error('Delete reference image error:', error);
+    console.error("Delete reference image error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to delete reference image',
-      error: error.message
+      message: "Failed to delete reference image",
+      error: error.message,
     });
   }
 };
@@ -475,5 +546,5 @@ export default {
   addSection,
   updateSection,
   deleteSection,
-  deleteReferenceImage
+  deleteReferenceImage,
 };
