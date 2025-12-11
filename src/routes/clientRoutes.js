@@ -6,7 +6,8 @@ import {
   createClient,
   updateClient,
   deleteClient,
-  getClientTasks
+  getClientTasks,
+  toggleClientStatus 
 } from '../controllers/clientController.js';
 import { protect, authorize } from '../middleware/auth.js';
 
@@ -24,6 +25,7 @@ router.get('/:id/tasks', protect, getClientTasks);
 router.post('/', protect, authorize('admin'), createClient);
 router.put('/:id', protect, updateClient);
 router.delete('/:id', protect, authorize('admin'), deleteClient);
+router.put('/:id/toggle-status', protect, authorize('admin'), toggleClientStatus);
 
 export default router;
 
