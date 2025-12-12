@@ -1,4 +1,4 @@
-// backend/src/controllers/taskController.js - ✅ UPDATED
+// backend/src/controllers/taskController.js - ✅ UPDATED: Multiple Sections Support
 import Task from "../models/Task.js";
 import User from "../models/User.js";
 import Client from "../models/Client.js";
@@ -38,7 +38,7 @@ export const getTasks = async (req, res) => {
     if (worker) query.worker = worker;
     if (client) query.client = client;
     if (site) query.site = site;
-    if (section) query.section = section; // ✅ Added
+    if (section) query.sections = section; // ✅ Updated
     if (branch) query.branch = branch;
     if (priority) query.priority = priority;
     if (category) query.category = category;
@@ -103,15 +103,17 @@ export const getTask = async (req, res) => {
       }
     }
 
-    // ✅ Get reference images from the specific section
+    // ✅ Get reference images from ALL selected sections
     let referenceImages = [];
-    if (task.site && task.section) {
+    if (task.site && task.sections && task.sections.length > 0) {
       const site = await Site.findById(task.site);
       if (site) {
-        const section = site.sections.id(task.section);
-        if (section && section.referenceImages) {
-          referenceImages = section.referenceImages;
-        }
+        task.sections.forEach((sectionId) => {
+          const section = site.sections.id(sectionId);
+          if (section && section.referenceImages) {
+            referenceImages.push(...section.referenceImages);
+          }
+        });
       }
     }
 
@@ -119,7 +121,7 @@ export const getTask = async (req, res) => {
       success: true,
       data: {
         ...task.toObject(),
-        referenceImages, // ✅ Add reference images to response
+        referenceImages,
       },
     });
   } catch (error) {
@@ -149,11 +151,11 @@ export const createTask = async (req, res) => {
       });
     }
 
-    // ✅ Validation: Section is required
-    if (!taskData.section) {
+    // ✅ Validation: At least one section is required
+    if (!taskData.sections || taskData.sections.length === 0) {
       return res.status(400).json({
         success: false,
-        message: "Section is required",
+        message: "At least one section is required",
       });
     }
 
@@ -166,12 +168,15 @@ export const createTask = async (req, res) => {
       });
     }
 
-    // ✅ Verify Section exists in Site
-    const section = site.sections.id(taskData.section);
-    if (!section) {
+    // ✅ Verify ALL Sections exist in Site
+    const invalidSections = taskData.sections.filter(
+      (sectionId) => !site.sections.id(sectionId)
+    );
+
+    if (invalidSections.length > 0) {
       return res.status(404).json({
         success: false,
-        message: "Section not found in this site",
+        message: "One or more sections not found in this site",
       });
     }
 
@@ -187,6 +192,7 @@ export const createTask = async (req, res) => {
         message: "Invalid client ID",
       });
     }
+
     // Auto-fill branch from site
     if (!taskData.branch && site.branch?._id) {
       taskData.branch = site.branch._id;
@@ -228,7 +234,6 @@ export const createTask = async (req, res) => {
   }
 };
 
-
 /**
  * @desc    Toggle image visibility to client
  * @route   PUT /api/v1/tasks/:id/images/:imageId/visibility
@@ -236,56 +241,55 @@ export const createTask = async (req, res) => {
  */
 export const toggleImageVisibility = async (req, res) => {
   try {
-    const { imageType } = req.body; // 'before' or 'after'
+    const { imageType } = req.body;
     const task = await Task.findById(req.params.id);
 
     if (!task) {
       return res.status(404).json({
         success: false,
-        message: 'Task not found'
+        message: "Task not found",
       });
     }
 
-    // Find the image in the specified type array
     const imageArray = task.images[imageType];
-    
+
     if (!imageArray) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid image type'
+        message: "Invalid image type",
       });
     }
 
     const imageIndex = imageArray.findIndex(
-      img => img._id.toString() === req.params.imageId
+      (img) => img._id.toString() === req.params.imageId
     );
 
     if (imageIndex === -1) {
       return res.status(404).json({
         success: false,
-        message: 'Image not found'
+        message: "Image not found",
       });
     }
 
-    // Toggle visibility
-    imageArray[imageIndex].isVisibleToClient = !imageArray[imageIndex].isVisibleToClient;
-    
+    imageArray[imageIndex].isVisibleToClient =
+      !imageArray[imageIndex].isVisibleToClient;
+
     await task.save();
 
     res.status(200).json({
       success: true,
-      message: 'Image visibility updated successfully',
+      message: "Image visibility updated successfully",
       data: {
         imageId: req.params.imageId,
-        isVisibleToClient: imageArray[imageIndex].isVisibleToClient
-      }
+        isVisibleToClient: imageArray[imageIndex].isVisibleToClient,
+      },
     });
   } catch (error) {
-    console.error('Toggle image visibility error:', error);
+    console.error("Toggle image visibility error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to update image visibility',
-      error: error.message
+      message: "Failed to update image visibility",
+      error: error.message,
     });
   }
 };
@@ -303,22 +307,21 @@ export const bulkUpdateImageVisibility = async (req, res) => {
     if (!task) {
       return res.status(404).json({
         success: false,
-        message: 'Task not found'
+        message: "Task not found",
       });
     }
 
     const imageArray = task.images[imageType];
-    
+
     if (!imageArray) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid image type'
+        message: "Invalid image type",
       });
     }
 
-    // Update visibility for all specified images
     let updatedCount = 0;
-    imageArray.forEach(img => {
+    imageArray.forEach((img) => {
       if (imageIds.includes(img._id.toString())) {
         img.isVisibleToClient = isVisible;
         updatedCount++;
@@ -332,15 +335,15 @@ export const bulkUpdateImageVisibility = async (req, res) => {
       message: `${updatedCount} image(s) visibility updated successfully`,
       data: {
         updatedCount,
-        isVisible
-      }
+        isVisible,
+      },
     });
   } catch (error) {
-    console.error('Bulk update image visibility error:', error);
+    console.error("Bulk update image visibility error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to update images visibility',
-      error: error.message
+      message: "Failed to update images visibility",
+      error: error.message,
     });
   }
 };
@@ -361,7 +364,6 @@ export const updateTask = async (req, res) => {
       });
     }
 
-    // Check authorization
     if (req.user.role === "worker" && task.worker?.toString() !== req.user.id) {
       return res.status(403).json({
         success: false,
@@ -369,7 +371,6 @@ export const updateTask = async (req, res) => {
       });
     }
 
-    // If assigning worker, deduct materials
     if (req.body.worker && !task.worker) {
       if (task.materials && task.materials.length > 0) {
         for (const material of task.materials) {
@@ -384,28 +385,45 @@ export const updateTask = async (req, res) => {
       req.body.status = "assigned";
     }
 
-    // If marking as completed
+    // ✅ If marking as completed, update section last task status
     if (req.body.status === "completed" && task.status !== "completed") {
       req.body.completedAt = new Date();
 
-      // Update client completed tasks
       await Client.findByIdAndUpdate(task.client, {
         $inc: { completedTasks: 1 },
       });
 
-      // Update worker completed tasks
       if (task.worker) {
         await User.findByIdAndUpdate(task.worker, {
           $inc: { "workerDetails.completedTasks": 1 },
         });
       }
 
-      // ✅ Update site completed tasks
       if (task.site) {
         await Site.findByIdAndUpdate(task.site, {
           $inc: { completedTasks: 1 },
           lastVisit: new Date(),
         });
+
+        // ✅ Update all sections' last task status
+        const site = await Site.findById(task.site);
+        if (site && task.sections) {
+          for (const sectionId of task.sections) {
+            await site.updateSectionLastTask(sectionId, "completed", task._id);
+          }
+        }
+      }
+    }
+
+    // ✅ If marking as rejected, update section last task status
+    if (req.body.status === "rejected" && task.status !== "rejected") {
+      if (task.site) {
+        const site = await Site.findById(task.site);
+        if (site && task.sections) {
+          for (const sectionId of task.sections) {
+            await site.updateSectionLastTask(sectionId, "rejected", task._id);
+          }
+        }
       }
     }
 
@@ -575,7 +593,6 @@ export const uploadTaskImages = async (req, res) => {
       });
     }
 
-    // Check authorization
     if (req.user.role === "worker" && task.worker?.toString() !== req.user.id) {
       return res.status(403).json({
         success: false,
@@ -585,7 +602,6 @@ export const uploadTaskImages = async (req, res) => {
 
     const { imageType, isVisibleToClient = true } = req.body;
 
-    // ✅ Only before/after allowed now (no reference)
     if (!["before", "after"].includes(imageType)) {
       return res.status(400).json({
         success: false,
@@ -619,8 +635,6 @@ export const uploadTaskImages = async (req, res) => {
     task.images[imageType].push(...imageObjects);
     await task.save();
 
-    console.log(`✅ ${files.length} ${imageType} images uploaded successfully`);
-
     res.status(200).json({
       success: true,
       message: `${files.length} image(s) uploaded successfully`,
@@ -653,7 +667,6 @@ export const deleteTaskImage = async (req, res) => {
       });
     }
 
-    // Check authorization
     if (req.user.role === "worker" && task.worker?.toString() !== req.user.id) {
       return res.status(403).json({
         success: false,
@@ -746,7 +759,6 @@ export const assignTask = async (req, res) => {
     task.status = "assigned";
     await task.save();
 
-    // Send notification
     await notifyTaskAssignment(worker, task, task.client);
 
     res.status(200).json({
@@ -763,6 +775,7 @@ export const assignTask = async (req, res) => {
     });
   }
 };
+
 /**
  * @desc    Submit client feedback for completed task
  * @route   POST /api/v1/tasks/:id/feedback
@@ -776,32 +789,30 @@ export const submitFeedback = async (req, res) => {
     if (!task) {
       return res.status(404).json({
         success: false,
-        message: 'Task not found'
+        message: "Task not found",
       });
     }
 
-    // Check if task is completed
-    if (task.status !== 'completed') {
+    if (task.status !== "completed") {
       return res.status(400).json({
         success: false,
-        message: 'Can only provide feedback for completed tasks'
+        message: "Can only provide feedback for completed tasks",
       });
     }
 
-    // Check authorization (client can only feedback their own tasks)
-    if (req.user.role === 'client' && task.client.toString() !== req.user.id) {
+    if (req.user.role === "client" && task.client.toString() !== req.user.id) {
       return res.status(403).json({
         success: false,
-        message: 'Not authorized to feedback this task'
+        message: "Not authorized to feedback this task",
       });
     }
 
     // Prepare feedback data
     const feedbackData = {
       rating: parseInt(rating),
-      comment: comment || '',
+      comment: comment || "",
       imageNumber: imageNumber ? parseInt(imageNumber) : null,
-      submittedAt: new Date()
+      submittedAt: new Date(),
     };
 
     // Add feedback image if uploaded
@@ -810,27 +821,24 @@ export const submitFeedback = async (req, res) => {
       feedbackData.cloudinaryId = req.file.cloudinaryId;
     }
 
-    // Update task with feedback
     task.feedback = feedbackData;
     await task.save();
 
-    // TODO: Send notification to admin about new feedback
-    // await notifyAdminAboutFeedback(task, feedbackData);
-
     res.status(200).json({
       success: true,
-      message: 'Feedback submitted successfully',
-      data: task.feedback
+      message: "Feedback submitted successfully",
+      data: task.feedback,
     });
   } catch (error) {
-    console.error('Submit feedback error:', error);
+    console.error("Submit feedback error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to submit feedback',
-      error: error.message
+      message: "Failed to submit feedback",
+      error: error.message,
     });
   }
 };
+
 export default {
   getTasks,
   getTask,
@@ -844,5 +852,5 @@ export default {
   assignTask,
   toggleImageVisibility,
   bulkUpdateImageVisibility,
-    submitFeedback      
+  submitFeedback,
 };

@@ -167,6 +167,17 @@ export const createSite = async (req, res) => {
       };
     }
 
+    if (
+      !siteData.client ||
+      siteData.client === "undefined" ||
+      siteData.client === ""
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Client is required",
+      });
+    }
+
     // Create site
     const site = await Site.create(siteData);
 
