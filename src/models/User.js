@@ -63,6 +63,12 @@ const userSchema = new mongoose.Schema({
       type: Number,
       default: 0
     }
+  },
+  // ✅ NEW: Notes field for Workers
+  notes: {
+    type: String,
+    maxlength: 1000,
+    default: ''
   }
 }, {
   timestamps: true
