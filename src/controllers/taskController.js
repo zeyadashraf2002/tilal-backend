@@ -537,32 +537,41 @@ export const startTask = async (req, res) => {
 export const completeTask = async (req, res) => {
   try {
     const { latitude, longitude } = req.body;
-
     const task = await Task.findById(req.params.id);
-
     if (!task) {
       return res.status(404).json({
         success: false,
         message: "Task not found",
       });
     }
-
     if (task.worker.toString() !== req.user.id) {
       return res.status(403).json({
         success: false,
         message: "Not authorized",
       });
     }
-
+    if (task.status === "completed") {
+      return res.status(400).json({
+        success: false,
+        message: "Task already completed",
+      });
+    }
+    if (latitude === undefined || longitude === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: "Location coordinates are required",
+      });
+    }
     task.status = "completed";
     task.completedAt = new Date();
     task.endLocation = {
-      coordinates: { latitude, longitude },
+      coordinates: {
+        latitude: parseFloat(latitude),
+        longitude: parseFloat(longitude),
+      },
       timestamp: new Date(),
     };
-
     await task.save();
-
     res.status(200).json({
       success: true,
       message: "Task completed successfully",
