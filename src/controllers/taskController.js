@@ -77,7 +77,7 @@ export const getTask = async (req, res) => {
       .populate("branch", "name code address")
       .populate({
         path: "site",
-        select: "name description siteType sections coverImage",
+        select: "name description siteType sections coverImage totalArea",
         populate: {
           path: "client",
           select: "name email phone",
@@ -489,16 +489,13 @@ export const deleteTask = async (req, res) => {
 export const startTask = async (req, res) => {
   try {
     const { latitude, longitude } = req.body;
-
     const task = await Task.findById(req.params.id);
-
     if (!task) {
       return res.status(404).json({
         success: false,
         message: "Task not found",
       });
     }
-
     if (task.worker.toString() !== req.user.id) {
       return res.status(403).json({
         success: false,
@@ -508,13 +505,16 @@ export const startTask = async (req, res) => {
 
     task.status = "in-progress";
     task.startedAt = new Date();
-    task.startLocation = {
-      coordinates: { latitude, longitude },
-      timestamp: new Date(),
-    };
-
+    if (latitude !== undefined && longitude !== undefined) {
+      task.startLocation = {
+        coordinates: {
+          latitude: parseFloat(latitude),
+          longitude: parseFloat(longitude),
+        },
+        timestamp: new Date(),
+      };
+    }
     await task.save();
-
     res.status(200).json({
       success: true,
       message: "Task started successfully",
@@ -556,21 +556,17 @@ export const completeTask = async (req, res) => {
         message: "Task already completed",
       });
     }
-    if (latitude === undefined || longitude === undefined) {
-      return res.status(400).json({
-        success: false,
-        message: "Location coordinates are required",
-      });
-    }
     task.status = "completed";
     task.completedAt = new Date();
-    task.endLocation = {
-      coordinates: {
-        latitude: parseFloat(latitude),
-        longitude: parseFloat(longitude),
-      },
-      timestamp: new Date(),
-    };
+    if (latitude !== undefined && longitude !== undefined) {
+      task.endLocation = {
+        coordinates: {
+          latitude: parseFloat(latitude),
+          longitude: parseFloat(longitude),
+        },
+        timestamp: new Date(),
+      };
+    }
     await task.save();
     res.status(200).json({
       success: true,
