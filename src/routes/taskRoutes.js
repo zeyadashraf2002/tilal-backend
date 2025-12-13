@@ -1,5 +1,5 @@
 // backend/src/routes/taskRoutes.js - Fixed with Cloudinary
-import express from 'express';
+import express from "express";
 import {
   getTasks,
   getTask,
@@ -12,63 +12,67 @@ import {
   deleteTaskImage,
   assignTask,
   toggleImageVisibility,
-  bulkUpdateImageVisibility,         
-  submitFeedback
-} from '../controllers/taskController.js';
-import { protect, authorize } from '../middleware/auth.js';
-import { uploadMultiple, handleUploadError, uploadSingle } from '../middleware/upload.js';
+  bulkUpdateImageVisibility,
+  submitFeedback,
+  markSatisfied,
+} from "../controllers/taskController.js";
+import { protect, authorize } from "../middleware/auth.js";
+import {
+  uploadMultiple,
+  handleUploadError,
+  uploadSingle,
+} from "../middleware/upload.js";
 
 const router = express.Router();
 
 router.use(protect);
 
-router
-  .route('/')
-  .get(getTasks)
-  .post(authorize('admin'), createTask);
+router.route("/").get(getTasks).post(authorize("admin"), createTask);
 
 router
-  .route('/:id')
+  .route("/:id")
   .get(getTask)
   .put(updateTask)
-  .delete(authorize('admin'), deleteTask);
+  .delete(authorize("admin"), deleteTask);
 
-router.post('/:id/start', startTask);
-router.post('/:id/complete', completeTask);
-router.post('/:id/assign', authorize('admin'), assignTask);
+router.post("/:id/start", startTask);
+router.post("/:id/complete", completeTask);
+router.post("/:id/assign", authorize("admin"), assignTask);
 
 // ✅ Image upload routes with Cloudinary (up to 50 images)
 router.post(
-  '/:id/images',
-  authorize('admin', 'worker'),
-  uploadMultiple('images', 50, 'tasks'), // ✅ Cloudinary folder
+  "/:id/images",
+  authorize("admin", "worker"),
+  uploadMultiple("images", 50, "tasks"), // ✅ Cloudinary folder
   handleUploadError,
   uploadTaskImages
 );
 
 router.delete(
-  '/:id/images/:imageId',
-  authorize('admin', 'worker'),
+  "/:id/images/:imageId",
+  authorize("admin", "worker"),
   deleteTaskImage
 );
 router.put(
-  '/:id/images/:imageId/visibility',
-  authorize('admin'),
+  "/:id/images/:imageId/visibility",
+  authorize("admin"),
   toggleImageVisibility
 );
 
 router.put(
-  '/:id/images/bulk-visibility',
-  authorize('admin'),
+  "/:id/images/bulk-visibility",
+  authorize("admin"),
   bulkUpdateImageVisibility
 );
 // ✅ NEW: Client Feedback
 router.post(
-  '/:id/feedback',
+  "/:id/feedback",
   protect,
-  uploadSingle('feedbackImage', 'feedback'), // ✅ Cloudinary folder
+  uploadSingle("feedbackImage", "feedback"),
   handleUploadError,
   submitFeedback
 );
+// ✅ NEW: Client Feedback
+router.post("/:id/satisfied", protect, markSatisfied);
 
 export default router;
