@@ -71,13 +71,32 @@ export const getTasks = async (req, res) => {
  */
 export const getTask = async (req, res) => {
   try {
+    const baseTask = await Task.findById(req.params.id).select("worker").lean();
+
+    if (!baseTask) {
+      return res.status(404).json({
+        success: false,
+        message: "Task not found",
+      });
+    }
+
+    // Authorization check
+    if (req.user.role !== "admin") {
+      if (!baseTask.worker || baseTask.worker._id.toString() !== req.user.id) {
+        return res.status(403).json({
+          success: false,
+          message: "Not authorized to view this task",
+        });
+      }
+    }
+
     const task = await Task.findById(req.params.id)
       .populate("client", "name email phone address whatsapp")
       .populate("worker", "name email phone workerDetails")
       .populate("branch", "name code address")
       .populate({
         path: "site",
-        select: "name description siteType sections coverImage totalArea",
+        select: "name description siteType coverImage totalArea",
         populate: {
           path: "client",
           select: "name email phone",
@@ -86,43 +105,12 @@ export const getTask = async (req, res) => {
       .populate("materials.item", "name sku unit")
       .populate("adminReview.reviewedBy", "name email");
 
-    if (!task) {
-      return res.status(404).json({
-        success: false,
-        message: "Task not found",
-      });
-    }
-
-    // Check authorization
-    if (req.user.role !== "admin") {
-      if (!task.worker || task.worker._id.toString() !== req.user.id) {
-        return res.status(403).json({
-          success: false,
-          message: "Not authorized to view this task",
-        });
-      }
-    }
-
-    // ✅ Get reference images from ALL selected sections
-    let referenceImages = [];
-    if (task.site && task.sections && task.sections.length > 0) {
-      const site = await Site.findById(task.site);
-      if (site) {
-        task.sections.forEach((sectionId) => {
-          const section = site.sections.id(sectionId);
-          if (section && section.referenceImages) {
-            referenceImages.push(...section.referenceImages);
-          }
-        });
-      }
-    }
+    // REMOVED: Dynamic lookup of reference images
+    // Now uses task.referenceImages (snapshotted at creation)
 
     res.status(200).json({
       success: true,
-      data: {
-        ...task.toObject(),
-        referenceImages,
-      },
+      data: task,
     });
   } catch (error) {
     console.error("Get task error:", error);
@@ -141,36 +129,48 @@ export const getTask = async (req, res) => {
  */
 export const createTask = async (req, res) => {
   try {
-    const taskData = req.body;
+    const {
+      title,
+      description,
+      site,
+      sections, // array of section IDs
+      client,
+      scheduledDate,
+      priority,
+      category,
+      estimatedDuration,
+      materials,
+      notes,
+      worker,
+    } = req.body;
 
-    // ✅ Validation: Site is required
-    if (!taskData.site) {
+    // Validate required fields
+    if (!title || !description || !site || !sections || !client || !worker) {
       return res.status(400).json({
         success: false,
-        message: "Site is required",
+        message: "Please provide all required fields",
       });
     }
 
-    // ✅ Validation: At least one section is required
-    if (!taskData.sections || taskData.sections.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "At least one section is required",
-      });
-    }
-
-    // ✅ Verify Site exists
-    const site = await Site.findById(taskData.site);
-    if (!site) {
+    // Validate site and sections
+    const siteDoc = await Site.findById(site);
+    if (!siteDoc) {
       return res.status(404).json({
         success: false,
         message: "Site not found",
       });
     }
 
+    console.log(sections);
+
     // ✅ Verify ALL Sections exist in Site
-    const invalidSections = taskData.sections.filter(
-      (sectionId) => !site.sections.id(sectionId)
+    const invalidSections = sections.filter(
+      (sectionId) =>
+        !siteDoc.sections.some((sec) => sec._id.toString() === sectionId)
+    );
+
+    const validSections = siteDoc.sections.filter((sec) =>
+      sections.includes(sec._id.toString())
     );
 
     if (invalidSections.length > 0) {
@@ -181,43 +181,60 @@ export const createTask = async (req, res) => {
     }
 
     // ✅ Auto-fill Client from Site
-    if (!taskData.client) {
-      taskData.client = site.client;
+    if (!req.body.client) {
+      req.body.client = site.client;
     }
 
     // ✅ Validate Client ID
-    if (!mongoose.Types.ObjectId.isValid(taskData.client)) {
+    if (!mongoose.Types.ObjectId.isValid(client)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid client ID",
+        message: "One or more sections do not belong to this site",
       });
     }
 
-    // Auto-fill branch from site
-    if (!taskData.branch && site.branch?._id) {
-      taskData.branch = site.branch._id;
-    }
-
-    const task = await Task.create(taskData);
-
-    // ✅ Populate full data
-    const populatedTask = await Task.findById(task._id)
-      .populate("client", "name email phone")
-      .populate("worker", "name email")
-      .populate("branch", "name code")
-      .populate("site", "name siteType");
-
-    // Update client total tasks
-    if (task.client) {
-      await Client.findByIdAndUpdate(task.client, {
-        $inc: { totalTasks: 1 },
-      });
-    }
-
-    // ✅ Update site total tasks
-    await Site.findByIdAndUpdate(task.site, {
-      $inc: { totalTasks: 1 },
+    // SNAPSHOT: Collect all reference images from selected sections
+    let referenceImages = [];
+    validSections.forEach((section) => {
+      if (section.referenceImages && section.referenceImages.length > 0) {
+        const copied = section.referenceImages.map((img) => ({
+          url: img.url,
+          cloudinaryId: img.cloudinaryId,
+          caption: img.caption,
+          mediaType: img.mediaType || "image",
+          format: img.format,
+          duration: img.duration,
+          uploadedAt: img.uploadedAt,
+          qtn: img.qtn || 1,
+          description: img.description,
+          originalSectionId: section._id,
+        }));
+        referenceImages.push(...copied);
+      }
     });
+
+    const task = await Task.create({
+      title,
+      description,
+      site,
+      worker,
+      sections: validSections.map((s) => s._id),
+      client,
+      scheduledDate,
+      priority: priority || "medium",
+      category: category || "other",
+      estimatedDuration: estimatedDuration || 2,
+      materials: materials || [],
+      notes,
+      status: "pending",
+      referenceImages, // ← Snapshotted here
+    });
+
+    // Populate and return
+    const populatedTask = await Task.findById(task._id)
+      .populate("client", "name email phone address")
+      .populate("site", "name siteType")
+      .populate("materials.item", "name sku unit");
 
     res.status(201).json({
       success: true,
