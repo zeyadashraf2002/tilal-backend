@@ -340,22 +340,19 @@ export const deleteSite = async (req, res) => {
 export const addSection = async (req, res) => {
   try {
     const site = await Site.findById(req.params.id);
-
     if (!site) {
-      return res.status(404).json({
-        success: false,
-        message: "Site not found",
-      });
+      return res.status(404).json({ success: false, message: "Site not found" });
     }
 
     const sectionData = req.body;
 
-    // Handle reference images from Cloudinary
+    // ✅ Handle reference images with QTN from Cloudinary
     if (req.files && req.files.length > 0) {
-      sectionData.referenceImages = req.files.map((file) => ({
+      sectionData.referenceImages = req.files.map((file, idx) => ({
         url: file.url,
         cloudinaryId: file.cloudinaryId,
         uploadedAt: new Date(),
+        qtn: parseInt(req.body[`qtn_${idx}`]) || 1 // ✅ Get QTN from form
       }));
     }
 
@@ -548,6 +545,72 @@ export const deleteReferenceImage = async (req, res) => {
   }
 };
 
+
+/**
+ * @desc    Update reference image (QTN & Description)
+ * @route   PUT /api/v1/sites/:id/sections/:sectionId/images/:imageId
+ * @access  Private (Admin only)
+ */
+export const updateReferenceImage = async (req, res) => {
+  try {
+    const { id, sectionId, imageId } = req.params;
+    const { qtn, description, caption } = req.body;
+
+    const site = await Site.findById(id);
+
+    if (!site) {
+      return res.status(404).json({
+        success: false,
+        message: "Site not found",
+      });
+    }
+
+    const section = site.sections.id(sectionId);
+
+    if (!section) {
+      return res.status(404).json({
+        success: false,
+        message: "Section not found",
+      });
+    }
+
+    // Find the specific image
+    const image = section.referenceImages.id(imageId);
+
+    if (!image) {
+      return res.status(404).json({
+        success: false,
+        message: "Image not found",
+      });
+    }
+
+    // Update image fields
+    if (qtn !== undefined) {
+      image.qtn = parseInt(qtn) || 1;
+    }
+    if (description !== undefined) {
+      image.description = description;
+    }
+    if (caption !== undefined) {
+      image.caption = caption;
+    }
+
+    await site.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Reference image updated successfully",
+      data: site,
+    });
+  } catch (error) {
+    console.error("Update reference image error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update reference image",
+      error: error.message,
+    });
+  }
+};
 export default {
   getAllSites,
   getSiteById,
@@ -558,4 +621,5 @@ export default {
   updateSection,
   deleteSection,
   deleteReferenceImage,
+  updateReferenceImage,
 };

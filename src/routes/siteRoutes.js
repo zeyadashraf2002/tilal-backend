@@ -9,7 +9,8 @@ import {
   addSection,
   updateSection,
   deleteSection,
-  deleteReferenceImage
+  deleteReferenceImage,
+  updateReferenceImage
 } from '../controllers/siteController.js';
 import { protect, authorize } from '../middleware/auth.js';
 import { uploadSingle, uploadMultiple, handleUploadError } from '../middleware/upload.js';
@@ -111,4 +112,8 @@ router.delete('/:id/sections/:sectionId', deleteSection);
  */
 router.delete('/:id/sections/:sectionId/images/:imageId', deleteReferenceImage);
 
+router.put(
+  '/:id/sections/:sectionId/images/:imageId',
+  updateReferenceImage
+);
 export default router;
