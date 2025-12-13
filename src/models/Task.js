@@ -1,4 +1,4 @@
-// backend/src/models/Task.js - ✅ UPDATED: Multiple Sections Support
+// backend/src/models/Task.js -  UPDATED: Feedback Schema with isSatisfiedOnly
 import mongoose from "mongoose";
 
 const taskSchema = new mongoose.Schema(
@@ -14,7 +14,7 @@ const taskSchema = new mongoose.Schema(
       maxlength: 2000,
     },
 
-    // ✅ UPDATED: Site & Sections (multiple sections now)
+    // UPDATED: Site & Sections (multiple sections now)
     site: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Site",
@@ -25,7 +25,7 @@ const taskSchema = new mongoose.Schema(
         type: mongoose.Schema.Types.ObjectId,
         required: true,
       },
-    ], // ✅ Changed from single to array
+    ],
 
     client: {
       type: mongoose.Schema.Types.ObjectId,
@@ -222,6 +222,10 @@ const taskSchema = new mongoose.Schema(
       image: String,
       cloudinaryId: String,
       submittedAt: Date,
+      isSatisfiedOnly: {
+        type: Boolean,
+        default: false, // True if client just clicked "Satisfied" button
+      },
     },
 
     // Invoice
@@ -243,7 +247,7 @@ const taskSchema = new mongoose.Schema(
 // Indexes
 taskSchema.index({ client: 1, status: 1 });
 taskSchema.index({ worker: 1, status: 1 });
-taskSchema.index({ site: 1, sections: 1 }); // ✅ Updated index
+taskSchema.index({ site: 1, sections: 1 });
 taskSchema.index({ branch: 1, status: 1 });
 taskSchema.index({ scheduledDate: 1 });
 taskSchema.index({ status: 1, priority: 1 });

@@ -844,6 +844,61 @@ export const submitFeedback = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Mark task as satisfied (without detailed feedback)
+ * @route   POST /api/v1/tasks/:id/satisfied
+ * @access  Private (Client only)
+ */
+export const markSatisfied = async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: "Task not found",
+      });
+    }
+
+    if (task.status !== "completed") {
+      return res.status(400).json({
+        success: false,
+        message: "Can only mark satisfaction for completed tasks",
+      });
+    }
+
+    if (req.user.role === "client" && task.client.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized",
+      });
+    }
+
+    // Mark as satisfied with 5 stars
+    task.feedback = {
+      rating: 5,
+      comment: "Client is satisfied with the work ✓",
+      isSatisfiedOnly: true, // Flag to indicate this is just satisfaction mark
+      submittedAt: new Date(),
+    };
+
+    await task.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Task marked as satisfied",
+      data: task.feedback,
+    });
+  } catch (error) {
+    console.error("Mark satisfied error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to mark task as satisfied",
+      error: error.message,
+    });
+  }
+};
+
 export default {
   getTasks,
   getTask,
@@ -858,4 +913,5 @@ export default {
   toggleImageVisibility,
   bulkUpdateImageVisibility,
   submitFeedback,
+  markSatisfied,
 };
