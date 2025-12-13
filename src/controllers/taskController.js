@@ -619,14 +619,18 @@ export const uploadTaskImages = async (req, res) => {
     if (files.length === 0) {
       return res.status(400).json({
         success: false,
-        message: "No images uploaded",
+        message: "No files uploaded",
       });
     }
 
-    const imageObjects = files.map((file) => ({
+    // ✅ UPDATED: Support both images and videos
+    const mediaObjects = files.map((file) => ({
       url: file.url,
       cloudinaryId: file.cloudinaryId,
-      thumbnail: file.url,
+      thumbnail: file.url, // For videos, Cloudinary auto-generates thumbnails
+      mediaType: file.resourceType, // ✅ 'image' or 'video'
+      format: file.format, // jpg, png, mp4, etc.
+      duration: file.duration || null, // ✅ For videos
       uploadedAt: new Date(),
       uploadedBy: req.user.id,
       isVisibleToClient:
@@ -637,19 +641,19 @@ export const uploadTaskImages = async (req, res) => {
       task.images = { before: [], after: [] };
     }
 
-    task.images[imageType].push(...imageObjects);
+    task.images[imageType].push(...mediaObjects);
     await task.save();
 
     res.status(200).json({
       success: true,
-      message: `${files.length} image(s) uploaded successfully`,
+      message: `${files.length} file(s) uploaded successfully`,
       data: task.images,
     });
   } catch (error) {
     console.error("Upload task images error:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to upload images",
+      message: "Failed to upload files",
       error: error.message,
     });
   }

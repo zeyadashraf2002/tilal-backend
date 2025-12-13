@@ -1,4 +1,4 @@
-// backend/src/models/Task.js -  UPDATED: Feedback Schema with isSatisfiedOnly
+// backend/src/models/Task.js - ✅ UPDATED: Support Videos
 import mongoose from "mongoose";
 
 const taskSchema = new mongoose.Schema(
@@ -14,7 +14,6 @@ const taskSchema = new mongoose.Schema(
       maxlength: 2000,
     },
 
-    // UPDATED: Site & Sections (multiple sections now)
     site: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Site",
@@ -111,13 +110,20 @@ const taskSchema = new mongoose.Schema(
       timestamp: Date,
     },
 
-    // Images: Before/After only
+    // ✅ UPDATED: Images/Videos with mediaType
     images: {
       before: [
         {
           url: String,
           cloudinaryId: String,
           thumbnail: String,
+          mediaType: {
+            type: String,
+            enum: ['image', 'video'],
+            default: 'image'
+          },
+          format: String, // jpg, png, mp4, etc.
+          duration: Number, // For videos only
           uploadedAt: {
             type: Date,
             default: Date.now,
@@ -137,6 +143,13 @@ const taskSchema = new mongoose.Schema(
           url: String,
           cloudinaryId: String,
           thumbnail: String,
+          mediaType: {
+            type: String,
+            enum: ['image', 'video'],
+            default: 'image'
+          },
+          format: String,
+          duration: Number,
           uploadedAt: {
             type: Date,
             default: Date.now,
@@ -224,7 +237,7 @@ const taskSchema = new mongoose.Schema(
       submittedAt: Date,
       isSatisfiedOnly: {
         type: Boolean,
-        default: false, // True if client just clicked "Satisfied" button
+        default: false,
       },
     },
 

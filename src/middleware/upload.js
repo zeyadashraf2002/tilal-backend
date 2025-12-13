@@ -1,4 +1,4 @@
-// backend/src/middleware/upload.js - Fixed Cloudinary
+// backend/src/middleware/upload.js - ✅ UPDATED: Support Videos
 import multer from "multer";
 import { v2 as cloudinary } from "cloudinary";
 import streamifier from "streamifier";
@@ -16,31 +16,46 @@ const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: 100 * 1024 * 1024 }, // ✅ 100MB for videos
   fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif|webp/;
-    const extname = allowedTypes.test(file.originalname.toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
+    // ✅ Support both images and videos
+    const allowedImageTypes = /jpeg|jpg|png|gif|webp/;
+    const allowedVideoTypes = /mp4|mov|avi|mkv|webm/;
+    
+    const extname = file.originalname.toLowerCase();
+    const mimetype = file.mimetype;
 
-    if (mimetype && extname) {
+    const isImage = allowedImageTypes.test(extname) && mimetype.startsWith('image/');
+    const isVideo = allowedVideoTypes.test(extname) && mimetype.startsWith('video/');
+
+    if (isImage || isVideo) {
       return cb(null, true);
     }
-    cb(new Error("Only image files are allowed!"));
+    cb(new Error("Only image and video files are allowed!"));
   },
 });
 
-// ✅ Upload to Cloudinary
-const uploadToCloudinary = (fileBuffer, folder = "garden-ms") => {
+// ✅ Upload to Cloudinary (Images or Videos)
+const uploadToCloudinary = (fileBuffer, folder = "garden-ms", mimetype) => {
   return new Promise((resolve, reject) => {
+    const isVideo = mimetype.startsWith('video/');
+    
+    const uploadOptions = {
+      folder,
+      resource_type: isVideo ? 'video' : 'image', // ✅ Auto-detect
+    };
+
+    // ✅ Only apply transformations to images
+    if (!isVideo) {
+      uploadOptions.transformation = [
+        { width: 1280, crop: "limit" },
+        { quality: "auto:low" },
+        { fetch_format: "webp" },
+      ];
+    }
+
     const stream = cloudinary.uploader.upload_stream(
-      {
-        folder,
-        transformation: [
-          { width: 1280, crop: "limit" },
-          { quality: "auto:low" },
-          { fetch_format: "webp" },
-        ],
-      },
+      uploadOptions,
       (error, result) => {
         if (error) {
           console.error("Cloudinary upload error:", error);
@@ -62,12 +77,18 @@ export const uploadSingle = (fieldName, folder = "general") => [
       if (!req.file) return next();
 
       console.log("📤 Uploading to Cloudinary...");
-      const result = await uploadToCloudinary(req.file.buffer, folder);
+      const result = await uploadToCloudinary(
+        req.file.buffer, 
+        folder, 
+        req.file.mimetype
+      );
 
       req.file.cloudinaryUrl = result.secure_url;
       req.file.cloudinaryId = result.public_id;
+      req.file.resourceType = result.resource_type; // ✅ 'image' or 'video'
+      req.file.format = result.format;
 
-      console.log("✅ Upload successful:", result.secure_url);
+      console.log(`✅ Upload successful (${result.resource_type}):`, result.secure_url);
       next();
     } catch (error) {
       console.error("❌ Upload failed:", error);
@@ -86,7 +107,7 @@ export const uploadMultiple = (fieldName, maxCount = 50, folder = "tasks") => [
       console.log(`📤 Uploading ${req.files.length} files to Cloudinary...`);
 
       const uploadPromises = req.files.map((file) =>
-        uploadToCloudinary(file.buffer, folder)
+        uploadToCloudinary(file.buffer, folder, file.mimetype)
       );
 
       const results = await Promise.all(uploadPromises);
@@ -94,8 +115,11 @@ export const uploadMultiple = (fieldName, maxCount = 50, folder = "tasks") => [
       req.files = results.map((result) => ({
         url: result.secure_url,
         cloudinaryId: result.public_id,
+        resourceType: result.resource_type, // ✅ 'image' or 'video'
+        format: result.format,
         width: result.width,
         height: result.height,
+        duration: result.duration, // ✅ For videos
       }));
 
       console.log("✅ All files uploaded successfully");
@@ -113,7 +137,7 @@ export const handleUploadError = (err, req, res, next) => {
     if (err.code === "LIMIT_FILE_SIZE") {
       return res.status(400).json({
         success: false,
-        message: "File too large. Maximum size is 10MB",
+        message: "File too large. Maximum size is 100MB",
       });
     }
     if (err.code === "LIMIT_FILE_COUNT") {

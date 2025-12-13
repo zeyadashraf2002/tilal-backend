@@ -1,4 +1,4 @@
-// backend/src/models/Site.js - UPDATED WITH MULTIPLE SECTIONS PER TASK
+// backend/src/models/Site.js - ✅ UPDATED: Support Videos in Reference Images
 import mongoose from "mongoose";
 
 const sectionSchema = new mongoose.Schema(
@@ -16,11 +16,19 @@ const sectionSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    // ✅ UPDATED: Support videos in reference images
     referenceImages: [
       {
         url: String,
         cloudinaryId: String,
         caption: String,
+        mediaType: {
+          type: String,
+          enum: ['image', 'video'],
+          default: 'image'
+        },
+        format: String, // jpg, png, mp4, etc.
+        duration: Number, // For videos only
         uploadedAt: {
           type: Date,
           default: Date.now,
@@ -39,7 +47,6 @@ const sectionSchema = new mongoose.Schema(
     },
     lastWorkedOn: Date,
     notes: String,
-    // ✅ NEW: Track last task status for this section
     lastTaskStatus: {
       type: String,
       enum: [
@@ -156,7 +163,7 @@ siteSchema.methods.deleteSection = async function (sectionId) {
   return await this.save();
 };
 
-// NEW: Method to update section's last task status
+// Method to update section's last task status
 siteSchema.methods.updateSectionLastTask = async function (
   sectionId,
   taskStatus,

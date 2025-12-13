@@ -346,13 +346,16 @@ export const addSection = async (req, res) => {
 
     const sectionData = req.body;
 
-    // ✅ Handle reference images with QTN from Cloudinary
+    // ✅ UPDATED: Handle reference images/videos with QTN from Cloudinary
     if (req.files && req.files.length > 0) {
       sectionData.referenceImages = req.files.map((file, idx) => ({
         url: file.url,
         cloudinaryId: file.cloudinaryId,
         uploadedAt: new Date(),
-        qtn: parseInt(req.body[`qtn_${idx}`]) || 1 // ✅ Get QTN from form
+        qtn: parseInt(req.body[`qtn_${idx}`]) || 1,
+        mediaType: file.resourceType, // ✅ 'image' or 'video'
+        format: file.format, // jpg, png, mp4, etc.
+        duration: file.duration || null, // ✅ For videos
       }));
     }
 
@@ -391,12 +394,18 @@ export const updateSection = async (req, res) => {
 
     const updateData = req.body;
 
-    // Handle new reference images
+    // ✅ UPDATED: Handle new reference images/videos with QTN
     if (req.files && req.files.length > 0) {
-      const newImages = req.files.map((file) => ({
+      const newImages = req.files.map((file, idx) => ({
         url: file.url,
         cloudinaryId: file.cloudinaryId,
         uploadedAt: new Date(),
+        qtn: parseInt(req.body[`qtn_${idx}`]) || 1, // ✅ Support QTN
+        mediaType: file.resourceType, // ✅ 'image' or 'video'
+        format: file.format, // jpg, png, mp4, etc.
+        duration: file.duration || null, // ✅ For videos
+        caption: req.body[`caption_${idx}`] || "", // ✅ Optional caption
+        description: req.body[`description_${idx}`] || "", // ✅ Optional description
       }));
 
       // Get existing images
