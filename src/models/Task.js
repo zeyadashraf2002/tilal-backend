@@ -75,7 +75,6 @@ const taskSchema = new mongoose.Schema(
 
     scheduledDate: {
       type: Date,
-      required: true,
     },
     estimatedDuration: {
       type: Number,
@@ -110,6 +109,28 @@ const taskSchema = new mongoose.Schema(
       timestamp: Date,
     },
 
+    referenceImages: [
+      {
+        url: { type: String, required: true },
+        cloudinaryId: String,
+        caption: String,
+        mediaType: {
+          type: String,
+          enum: ["image", "video"],
+          default: "image",
+        },
+        format: String,
+        duration: Number,
+        uploadedAt: { type: Date, default: Date.now },
+        qtn: { type: Number, default: 1 },
+        description: String,
+        // Keep original section reference for traceability
+        originalSectionId: {
+          type: mongoose.Schema.Types.ObjectId,
+        },
+      },
+    ],
+
     // ✅ UPDATED: Images/Videos with mediaType
     images: {
       before: [
@@ -119,8 +140,8 @@ const taskSchema = new mongoose.Schema(
           thumbnail: String,
           mediaType: {
             type: String,
-            enum: ['image', 'video'],
-            default: 'image'
+            enum: ["image", "video"],
+            default: "image",
           },
           format: String, // jpg, png, mp4, etc.
           duration: Number, // For videos only
@@ -145,8 +166,8 @@ const taskSchema = new mongoose.Schema(
           thumbnail: String,
           mediaType: {
             type: String,
-            enum: ['image', 'video'],
-            default: 'image'
+            enum: ["image", "video"],
+            default: "image",
           },
           format: String,
           duration: Number,

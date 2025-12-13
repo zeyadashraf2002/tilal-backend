@@ -73,8 +73,8 @@ app.use(mongoSanitize());
 // 🚦 Rate Limiting
 // =====================================
 const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 1000,
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 10 * 60 * 1000,
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 5000,
   message: 'Too many requests from this IP, please try again later',
   standardHeaders: true,
   legacyHeaders: false,
@@ -115,7 +115,7 @@ app.use(`/api/${API_VERSION}/plants`, plantRoutes);
 app.use(`/api/${API_VERSION}/inventory`, inventoryRoutes);
 app.use(`/api/${API_VERSION}/reports`, reportRoutes);
 app.use(`/api/${API_VERSION}/notifications`, notificationRoutes);
-app.use(`/api/${API_VERSION}/uploads`, uploadRoutes); // ✅ هنا المسار المهم
+app.use(`/api/${API_VERSION}/uploads`, uploadRoutes);
 
 
 // =====================================
