@@ -5,7 +5,7 @@ import helmet from "helmet";
 import morgan from "morgan";
 import compression from "compression";
 import mongoSanitize from "express-mongo-sanitize";
-import rateLimit from "express-rate-limit";
+// import rateLimit from "express-rate-limit";
 import connectDB from "./src/config/database.js";
 import errorHandler from "./src/middleware/errorHandler.js";
 
@@ -16,7 +16,7 @@ import taskRoutes from "./src/routes/taskRoutes.js";
 import clientRoutes from "./src/routes/clientRoutes.js";
 import plantRoutes from "./src/routes/plantRoutes.js";
 import inventoryRoutes from "./src/routes/inventoryRoutes.js";
-import invoiceRoutes from "./src/routes/invoiceRoutes.js";
+import deleteImageRoutes from "./src/routes/deleteImageRoutes.js";
 import reportRoutes from "./src/routes/reportRoutes.js";
 import notificationRoutes from "./src/routes/notificationRoutes.js";
 import uploadRoutes from "./src/routes/uploadRoutes.js";
@@ -74,15 +74,15 @@ app.use(mongoSanitize());
 // =====================================
 // 🚦 Rate Limiting
 // =====================================
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 10 * 60 * 1000,
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 10000,
-  message: "Too many requests from this IP, please try again later",
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: (req) => req.url.includes("/uploads") || req.url.includes("/health"),
-});
-app.use("/api", limiter);
+// const limiter = rateLimit({
+//   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 10 * 60 * 1000,
+//   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 10000,
+//   message: "Too many requests from this IP, please try again later",
+//   standardHeaders: true,
+//   legacyHeaders: false,
+//   skip: (req) => req.url.includes("/uploads") || req.url.includes("/health"),
+// });
+// app.use("/api", limiter);
 
 // =====================================
 // 🧩 Middleware
@@ -112,6 +112,7 @@ app.use(
 const API_VERSION = process.env.API_VERSION || "v1";
 
 app.use(`/api/${API_VERSION}/auth`, authRoutes);
+app.use(`/api/${API_VERSION}/delete-image`, deleteImageRoutes);
 app.use(`/api/${API_VERSION}/users`, userRoutes);
 app.use(`/api/${API_VERSION}/tasks`, taskRoutes);
 app.use(`/api/${API_VERSION}/clients`, clientRoutes);
