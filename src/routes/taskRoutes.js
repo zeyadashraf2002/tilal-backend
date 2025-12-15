@@ -15,6 +15,7 @@ import {
   bulkUpdateImageVisibility,
   submitFeedback,
   markSatisfied,
+  deleteBeforeMedia,
 } from "../controllers/taskController.js";
 import { protect, authorize } from "../middleware/auth.js";
 import {
@@ -74,5 +75,8 @@ router.post(
 );
 // ✅ NEW: Client Feedback
 router.post("/:id/satisfied", protect, markSatisfied);
+
+// New admin-only endpoint to delete all before images
+router.delete("/:id/before-media", authorize("admin"), deleteBeforeMedia);
 
 export default router;

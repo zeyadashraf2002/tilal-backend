@@ -920,6 +920,146 @@ export const markSatisfied = async (req, res) => {
   }
 };
 
+/**
+
+Helper function to extract public_id from Cloudinary URL
+*/
+const getPublicIdFromUrl = (url) => {
+  if (!url || !url.includes("cloudinary.com")) return null;
+  try {
+    const parts = url.split("/");
+    const uploadIndex = parts.findIndex((part) => part === "upload");
+    if (uploadIndex === -1) return null;
+    const publicIdWithExt = parts.slice(uploadIndex + 2).join("/"); // +2 to skip version
+    return publicIdWithExt.replace(/.[^/.]+$/, "");
+  } catch (err) {
+    return null;
+  }
+};
+
+/**
+
+Cron Job: Delete media from Cloudinary for tasks older than 3 months
+*/
+export const deleteOldTaskMedia = async () => {
+  try {
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    const oldTasks = await Task.find({
+      createdAt: { $lt: threeMonthsAgo },
+    }).select("referenceImages images feedback");
+    let totalDeleted = 0;
+    for (const task of oldTasks) {
+      const publicIds = new Set(); // Reference images
+      task.referenceImages.forEach((img) => {
+        if (img.cloudinaryId) publicIds.add(img.cloudinaryId);
+      }); // Before images
+      task.images.before.forEach((img) => {
+        if (img.cloudinaryId) publicIds.add(img.cloudinaryId);
+        const thumbId = getPublicIdFromUrl(img.thumbnail);
+        if (thumbId) publicIds.add(thumbId);
+      }); // After images
+      task.images.after.forEach((img) => {
+        if (img.cloudinaryId) publicIds.add(img.cloudinaryId);
+        const thumbId = getPublicIdFromUrl(img.thumbnail);
+        if (thumbId) publicIds.add(thumbId);
+      }); // Feedback image
+      if (task.feedback?.cloudinaryId)
+        publicIds.add(task.feedback.cloudinaryId); // Delete from Cloudinary
+      for (const publicId of publicIds) {
+        try {
+          await cloudinary.uploader.destroy(publicId, { invalidate: true });
+          totalDeleted++;
+        } catch (err) {
+          console.error(
+            `Failed to delete Cloudinary asset ${publicId}:, err.message`
+          );
+        }
+      } // Clear media from DB
+      task.referenceImages = [];
+      task.images.before = [];
+      task.images.after = [];
+      if (task.feedback) {
+        task.feedback.image = null;
+        task.feedback.cloudinaryId = null;
+      }
+      await task.save();
+    }
+    console.log(
+      `Cron: Deleted media for ${oldTasks.length} old tasks (${totalDeleted} assets)`
+    );
+  } catch (error) {
+    console.error("Error in deleteOldTaskMedia cron:", error.message);
+  }
+};
+
+/**
+
+Cron Job: Permanently delete tasks older than 3 months
+*/
+export const deleteOldTasks = async () => {
+  try {
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    const result = await Task.deleteMany({
+      createdAt: { $lt: threeMonthsAgo },
+    });
+    console.log(
+      `Cron: Permanently deleted ${result.deletedCount} tasks older than 3 months`
+    );
+  } catch (error) {
+    console.error("Error in deleteOldTasks cron:", error.message);
+  }
+};
+
+/**
+
+@desc    Admin endpoint: Delete all BEFORE images (media taken before delivery to client)
+@route   DELETE /api/v1/tasks/:id/before-media
+@access  Private (Admin only)
+*/
+export const deleteBeforeMedia = async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: "Task not found",
+      });
+    }
+    const publicIds = new Set();
+    task.images.before.forEach((img) => {
+      if (img.cloudinaryId) publicIds.add(img.cloudinaryId);
+      const thumbId = getPublicIdFromUrl(img.thumbnail);
+      if (thumbId) publicIds.add(thumbId);
+    }); // Delete from Cloudinary
+    for (const publicId of publicIds) {
+      try {
+        await cloudinary.uploader.destroy(publicId, { invalidate: true });
+      } catch (err) {
+        console.error(
+          `Failed to delete Cloudinary asset ${publicId}:, err.message`
+        );
+      }
+    } // Clear from DB
+    task.images.before = [];
+    await task.save();
+    res.status(200).json({
+      success: true,
+      message:
+        "All before-delivery media deleted successfully from Cloudinary and database",
+      data: { deletedCount: publicIds.size },
+    });
+  } catch (error) {
+    console.error("Delete before media error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete before media",
+      error: error.message,
+    });
+  }
+};
+
 export default {
   getTasks,
   getTask,
@@ -935,4 +1075,5 @@ export default {
   bulkUpdateImageVisibility,
   submitFeedback,
   markSatisfied,
+  deleteBeforeMedia,
 };
