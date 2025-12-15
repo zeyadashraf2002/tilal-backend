@@ -186,5 +186,7 @@ if (process.env.NODE_ENV !== "production") {
   });
 }
 
+// Load cron jobs (runs once at startup)
+import "./src/utils/cronJobs.js";
 // ✅ مهم جدًا لتعمل على Vercel
 export default app;
