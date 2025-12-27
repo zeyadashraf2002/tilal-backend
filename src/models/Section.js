@@ -7,7 +7,6 @@ const sectionSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Site",
       required: true,
-      index: true,
     },
     name: {
       type: String,
